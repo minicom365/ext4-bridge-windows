@@ -1,0 +1,29 @@
+[package]
+name = "ext4_bridge"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ext4_bridge"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ext4_cli"
+path = "src/main.rs"
+
+[dependencies]
+byteorder = "1.5.0"
+clap = { version = "4.5.4", features = ["derive"] }
+ext4-lwext4 = { version = "=0.1.2", features = ["gpl-extents", "gpl-xattr"] }
+uniffi = { version = "0.28.0", features = ["cli"] }
+ctrlc = "3.4"
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Ioctl",
+    "Win32_System_Memory",
+    "Win32_System_IO"
+] }
+
+[build-dependencies]
+uniffi = { version = "0.28.0", features = ["build"] }

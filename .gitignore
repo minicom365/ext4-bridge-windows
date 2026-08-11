@@ -1,0 +1,27 @@
+# Added by cargo
+/target
+
+# IDEs
+/.idea
+/.vscode
+/*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test/Temporary files
+test_tmp.bin
+*.dat
+*.log
+*.bin
+*.exe
+*.dll
+*.pdb
+*.metadata.json
+empty_inodes.txt
+ff_map.txt
+fstab_local.txt
+hostname_new.txt
+
+
