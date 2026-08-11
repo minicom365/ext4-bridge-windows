@@ -5,7 +5,7 @@ use std::io::Read;
 use ext4_lwext4::types::OpenFlags;
 
 #[derive(Parser)]
-#[command(author, version, about = "ext4_lwext4 기반 물리 디스크/이미지 브릿지")]
+#[command(author, version, about = "ext4_lwext4-based physical disk and image bridge for Windows")]
 struct CliArgs {
     #[command(subcommand)]
     command: Cli,
@@ -14,139 +14,139 @@ struct CliArgs {
 #[derive(Subcommand)]
 enum Cli {
     Ls {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
     Cat {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(long, help = "Hex 덤프 모드")]
+        #[arg(long, help = "Hex dump mode")]
         hex: bool,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
     WriteText {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
-        #[arg(help = "텍스트 데이터")]
+        #[arg(help = "Text content to write")]
         data: String,
     },
     WriteBin {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
-        #[arg(short, long, help = "로컬 파일에서 읽기")]
+        #[arg(short, long, help = "Path to the local file to read binary data from (stdin if omitted)")]
         from_file: Option<PathBuf>,
     },
     Cp {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "ext4 내부 원본 경로")]
+        #[arg(help = "Source file path inside ext4")]
         src: String,
-        #[arg(help = "로컬 대상 파일 경로")]
+        #[arg(help = "Destination path on the local filesystem")]
         dest: PathBuf,
     },
     Diff {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "ext4 내부 원본 경로")]
+        #[arg(help = "Source file path inside ext4")]
         ext4_path: String,
-        #[arg(help = "비교할 로컬 파일 경로")]
+        #[arg(help = "Local file path to compare with")]
         local_path: PathBuf,
     },
     Stat {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
     Rm {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path of file or directory in the ext4 filesystem")]
         path: String,
     },
     Mv {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "소스 절대 경로")]
+        #[arg(help = "Source absolute path inside ext4")]
         src: String,
-        #[arg(help = "대상 절대 경로")]
+        #[arg(help = "Destination absolute path inside ext4")]
         dest: String,
     },
     Mkdir {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "디렉터리 절대 경로")]
+        #[arg(help = "Absolute directory path to create in the ext4 filesystem")]
         path: String,
     },
     Ln {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "심볼릭 링크가 가리킬 대상 (타겟)")]
+        #[arg(help = "Target that the symlink points to")]
         target: String,
-        #[arg(help = "생성할 심볼릭 링크의 리눅스 절대 경로")]
+        #[arg(help = "Absolute symlink path to create in the ext4 filesystem")]
         linkpath: String,
     },
     Chmod {
-        #[arg(short, long, help = "드라이브 번호")]
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "이미지 파일 경로")]
+        #[arg(short, long, help = "Path to the disk image file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "파티션 인덱스")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
         partition: u32,
-        #[arg(help = "리눅스 절대 경로")]
+        #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
-        #[arg(help = "권한 모드 (예: 0o600)")]
+        #[arg(help = "Octal permission mode (e.g., 0o600, 0o755)")]
         mode: String,
     }
 }
@@ -155,7 +155,7 @@ fn get_disk_path(drive: Option<u32>, image: Option<String>) -> Result<String, St
     match (drive, image) {
         (Some(d), None) => Ok(format!("\\\\.\\PhysicalDrive{}", d)),
         (None, Some(img)) => Ok(img),
-        _ => Err("드라이브 번호(-d) 또는 이미지 경로(-i) 중 하나를 반드시 입력해야 합니다.".into()),
+        _ => Err("You must specify either a drive number (-d) or an image path (-i).".into()),
     }
 }
 
@@ -245,9 +245,9 @@ fn main() {
         Cli::WriteBin { drive, image, partition, path, from_file } => {
             let mut data = Vec::new();
             let read_res = if let Some(file_path) = from_file {
-                std::fs::read(&file_path).map_err(|e| format!("로컬 파일 읽기 실패: {}", e))
+                std::fs::read(&file_path).map_err(|e| format!("Failed to read local file: {}", e))
             } else {
-                std::io::stdin().read_to_end(&mut data).map_err(|e| format!("STDIN 읽기 실패: {}", e)).map(|_| data)
+                std::io::stdin().read_to_end(&mut data).map_err(|e| format!("Failed to read from STDIN: {}", e)).map(|_| data)
             };
             let data = match read_res {
                 Ok(d) => d,
