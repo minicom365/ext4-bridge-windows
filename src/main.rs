@@ -1,11 +1,22 @@
+// [EN] Architecture: CLI executable for Windows ext4 inspection, modification, VHDX mounting, and tree scanning.
+// [KO] 아키텍처: Windows 환경에서 PhysicalDrive, raw 디스크 이미지 및 VHDX를 조작·검사하고 트리 스캔을 수행하는 CLI 진입점.
+// Why other approaches were rejected: Requiring WSL2 mount commands or GUI explorer drivers fails in headless automation; standalone CLI provides instant zero-dependency scriptability.
+
 use clap::{Parser, Subcommand};
 use ext4_bridge::ext4::Ext4Bridge;
-use std::path::PathBuf;
-use std::io::Read;
 use ext4_lwext4::types::OpenFlags;
+use std::io::Read;
+use std::path::PathBuf;
+
+const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x00000800;
 
 #[derive(Parser)]
-#[command(author, version, about = "ext4_lwext4-based physical disk and image bridge for Windows")]
+#[command(
+    name = "ext4_cli",
+    author = "ext4-bridge-windows developers",
+    version = "0.2.0",
+    about = "High-performance ext4 bridge for Windows: VHDX (dynamic/fixed), raw disks, images, and tree scanner"
+)]
 struct CliArgs {
     #[command(subcommand)]
     command: Cli,
@@ -13,142 +24,180 @@ struct CliArgs {
 
 #[derive(Subcommand)]
 enum Cli {
+    #[command(about = "List directory contents in ext4 filesystem")]
     Ls {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
+    #[command(about = "Print file content to stdout (text or hex dump)")]
     Cat {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(long, help = "Hex dump mode")]
         hex: bool,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
+    #[command(about = "Write text content directly to a file")]
     WriteText {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
         #[arg(help = "Text content to write")]
         data: String,
     },
+    #[command(about = "Write binary data to a file from stdin or local file")]
     WriteBin {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
-        #[arg(short, long, help = "Path to the local file to read binary data from (stdin if omitted)")]
+        #[arg(short, long, help = "Path to local file (reads stdin if omitted)")]
         from_file: Option<PathBuf>,
     },
+    #[command(about = "Copy a file from ext4 to local Windows filesystem")]
     Cp {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Source file path inside ext4")]
         src: String,
         #[arg(help = "Destination path on the local filesystem")]
         dest: PathBuf,
     },
+    #[command(about = "Compare ext4 file content with a local Windows file")]
     Diff {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Source file path inside ext4")]
         ext4_path: String,
         #[arg(help = "Local file path to compare with")]
         local_path: PathBuf,
     },
+    #[command(about = "Display inode metadata and size for a file or directory")]
     Stat {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
     },
+    #[command(about = "Remove a file or directory from ext4 filesystem")]
     Rm {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
-        #[arg(help = "Absolute path of file or directory in the ext4 filesystem")]
+        #[arg(help = "Absolute path of file or directory in ext4")]
         path: String,
     },
+    #[command(about = "Move or rename a file or directory inside ext4")]
     Mv {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
-        #[arg(help = "Source absolute path inside ext4")]
+        #[arg(help = "Source path inside ext4")]
         src: String,
-        #[arg(help = "Destination absolute path inside ext4")]
+        #[arg(help = "Destination path inside ext4")]
         dest: String,
     },
+    #[command(about = "Create a directory inside ext4 filesystem")]
     Mkdir {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
-        #[arg(help = "Absolute directory path to create in the ext4 filesystem")]
+        #[arg(help = "Absolute directory path to create in ext4")]
         path: String,
     },
+    #[command(about = "Create a symbolic link inside ext4 filesystem")]
     Ln {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Target that the symlink points to")]
         target: String,
-        #[arg(help = "Absolute symlink path to create in the ext4 filesystem")]
+        #[arg(help = "Absolute symlink path to create")]
         linkpath: String,
     },
+    #[command(about = "Change file or directory permission mode")]
     Chmod {
         #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
         drive: Option<u32>,
-        #[arg(short, long, help = "Path to the disk image file")]
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
         image: Option<String>,
-        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based)")]
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
         partition: u32,
         #[arg(help = "Absolute path in the ext4 filesystem")]
         path: String,
-        #[arg(help = "Octal permission mode (e.g., 0o600, 0o755)")]
+        #[arg(help = "Octal permission mode (e.g., 0o644, 0o755)")]
         mode: String,
-    }
+    },
+    #[command(about = "High-speed recursive metadata/tree scanner for SniffEverything.exe")]
+    TreeScan {
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
+        drive: Option<u32>,
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
+        image: Option<String>,
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
+        partition: u32,
+        #[arg(default_value = "/", help = "Root path in ext4 to begin traversal")]
+        path: String,
+        #[arg(long, help = "Emit newline-delimited JSON (JSONL) instead of text")]
+        json: bool,
+        #[arg(long, help = "Maximum traversal depth (default: unlimited)")]
+        max_depth: Option<u32>,
+    },
+    #[command(about = "Display filesystem statistics (capacity, free space, block size, inodes)")]
+    StatFs {
+        #[arg(short, long, help = "Physical drive number (e.g. 1 for \\\\.\\PhysicalDrive1)")]
+        drive: Option<u32>,
+        #[arg(short, long, help = "Path to the disk image or .vhdx file")]
+        image: Option<String>,
+        #[arg(short, long, default_value_t = 1, help = "Partition index (1-based, 0 for whole disk)")]
+        partition: u32,
+        #[arg(long, help = "Emit JSON output")]
+        json: bool,
+    },
 }
 
 fn get_disk_path(drive: Option<u32>, image: Option<String>) -> Result<String, String> {
@@ -177,23 +226,31 @@ impl BridgeContext {
         let disk_path = match get_disk_path(self.drive, self.image.clone()) {
             Ok(p) => p,
             Err(e) => {
-                println!("[FAIL] {}", e);
-                return;
+                eprintln!("[FAIL] {}", e);
+                std::process::exit(1);
             }
         };
         match Ext4Bridge::new(&disk_path, self.partition, write_mode) {
             Ok(bridge) => {
                 if let Err(e) = f(&bridge) {
-                    println!("[FAIL] {}", e);
+                    eprintln!("[FAIL] {}", e);
+                    std::process::exit(1);
                 }
             }
-            Err(e) => println!("[FAIL] Initialization error: {:?}", e),
+            Err(e) => {
+                eprintln!("[FAIL] Initialization error: {:?}", e);
+                std::process::exit(1);
+            }
         }
     }
 }
 
 fn main() {
-    // 아키텍처 명세 주석: ext4 브릿지 CLI 명령어 처리에 대한 중복 생명주기 관리 로직을 BridgeContext 구조체로 캡슐화하여 OOP 패턴으로 단일화하고 개별 쉘 스크립트 기반 수정 방식을 완전히 배제하여 코드 안전성을 극대화합니다.
+    // Pillar 10: Enforce OS DLL Search-Order Lockdown (Mitigate DLL side-loading)
+    unsafe {
+        windows_sys::Win32::System::LibraryLoader::SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
+    }
+
     let args = CliArgs::parse();
 
     match args.command {
@@ -252,8 +309,8 @@ fn main() {
             let data = match read_res {
                 Ok(d) => d,
                 Err(e) => {
-                    println!("[FAIL] {}", e);
-                    return;
+                    eprintln!("[FAIL] {}", e);
+                    std::process::exit(1);
                 }
             };
             let ctx = BridgeContext::new(drive, image, partition);
@@ -280,8 +337,8 @@ fn main() {
             let local_data = match std::fs::read(&local_path) {
                 Ok(d) => d,
                 Err(e) => {
-                    println!("[FAIL] Failed to read local file: {}", e);
-                    return;
+                    eprintln!("[FAIL] Failed to read local file: {}", e);
+                    std::process::exit(1);
                 }
             };
             let ctx = BridgeContext::new(drive, image, partition);
@@ -360,6 +417,52 @@ fn main() {
             ctx.execute(true, |bridge| {
                 bridge.chmod_path(&path, parsed_mode).map_err(|e| format!("Chmod error: {:?}", e))?;
                 println!("[SUCCESS] Chmod '{}' to mode {:#o}!", path, parsed_mode);
+                Ok(())
+            });
+        }
+        Cli::TreeScan { drive, image, partition, path, json, max_depth } => {
+            let ctx = BridgeContext::new(drive, image, partition);
+            ctx.execute(false, |bridge| {
+                let start_time = std::time::Instant::now();
+                let entries = bridge.tree_scan(&path, max_depth).map_err(|e| format!("TreeScan error: {:?}", e))?;
+                let elapsed = start_time.elapsed();
+
+                if json {
+                    for entry in &entries {
+                        if let Ok(line) = serde_json::to_string(entry) {
+                            println!("{}", line);
+                        }
+                    }
+                } else {
+                    println!("[SUCCESS] Scanned {} entries in {:.2}ms starting at '{}':", entries.len(), elapsed.as_secs_f64() * 1000.0, path);
+                    for entry in entries.iter().take(50) {
+                        let kind = if entry.is_dir { "DIR " } else { "FILE" };
+                        println!("  {} | Inode {:8} | Size {:10} B | {}", kind, entry.inode, entry.size_bytes, entry.path);
+                    }
+                    if entries.len() > 50 {
+                        println!("  ... and {} more entries (use --json for complete output)", entries.len() - 50);
+                    }
+                }
+                Ok(())
+            });
+        }
+        Cli::StatFs { drive, image, partition, json } => {
+            let ctx = BridgeContext::new(drive, image, partition);
+            ctx.execute(false, |bridge| {
+                let stat = bridge.stat_fs().map_err(|e| format!("StatFs error: {:?}", e))?;
+                if json {
+                    let s = serde_json::to_string_pretty(&stat).unwrap_or_default();
+                    println!("{}", s);
+                } else {
+                    println!("[SUCCESS] Filesystem Statistics:");
+                    println!("  Volume Name  : {}", if stat.volume_name.is_empty() { "<unnamed>" } else { &stat.volume_name });
+                    println!("  Total Space  : {} bytes ({:.2} GiB)", stat.total_bytes, stat.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0));
+                    println!("  Free Space   : {} bytes ({:.2} GiB)", stat.free_bytes, stat.free_bytes as f64 / (1024.0 * 1024.0 * 1024.0));
+                    println!("  Used Space   : {} bytes ({:.2} GiB)", stat.used_bytes, stat.used_bytes as f64 / (1024.0 * 1024.0 * 1024.0));
+                    println!("  Block Size   : {} bytes", stat.block_size);
+                    println!("  Total Inodes : {}", stat.total_inodes);
+                    println!("  Free Inodes  : {}", stat.free_inodes);
+                }
                 Ok(())
             });
         }

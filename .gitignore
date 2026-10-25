@@ -23,5 +23,11 @@ empty_inodes.txt
 ff_map.txt
 fstab_local.txt
 hostname_new.txt
+*.vhdx
+*.img
+*.hnd
+
+# Internal tracking
+docs/internal/
 
 

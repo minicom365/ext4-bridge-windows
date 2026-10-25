@@ -296,12 +296,14 @@ dependencies = [
 
 [[package]]
 name = "ext4_bridge"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "clap",
  "ctrlc",
  "ext4-lwext4",
+ "serde",
+ "serde_json",
  "uniffi",
  "windows-sys 0.52.0",
 ]

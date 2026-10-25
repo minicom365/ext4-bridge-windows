@@ -1,7 +1,9 @@
 [package]
 name = "ext4_bridge"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+description = "High-performance ext4 bridge for Windows: VHDX dynamic/fixed, raw disks, images, and tree scanner API"
+license = "MIT OR Apache-2.0"
 
 [lib]
 name = "ext4_bridge"
@@ -17,13 +19,24 @@ clap = { version = "4.5.4", features = ["derive"] }
 ext4-lwext4 = { version = "=0.1.2", features = ["gpl-extents", "gpl-xattr"] }
 uniffi = { version = "0.28.0", features = ["cli"] }
 ctrlc = "3.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 windows-sys = { version = "0.52", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
     "Win32_System_Ioctl",
     "Win32_System_Memory",
-    "Win32_System_IO"
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_System_LibraryLoader"
 ] }
 
 [build-dependencies]
 uniffi = { version = "0.28.0", features = ["build"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
