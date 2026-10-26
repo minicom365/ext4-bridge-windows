@@ -105,39 +105,51 @@ pub extern "C" fn ext4_tree_scan(
     cb: Ext4ScanCallback,
     user_data: *mut c_void,
 ) -> i32 {
+    ext4_tree_scan_ex(bridge_ptr, root_path, max_depth, 0, 0, false, cb, user_data)
+}
+
+/// Extended C-ABI tree scanner with explicit caller-controlled `timeout_ms` (`0 = unlimited`),
+/// `max_entries` (`0 = unlimited`), and `debug_log` (`stderr` trace output).
+#[no_mangle]
+pub extern "C" fn ext4_tree_scan_ex(
+    bridge_ptr: *mut c_void,
+    root_path: *const c_char,
+    max_depth: u32,
+    timeout_ms: u64,
+    max_entries: usize,
+    debug_log: bool,
+    cb: Ext4ScanCallback,
+    user_data: *mut c_void,
+) -> i32 {
     if bridge_ptr.is_null() || root_path.is_null() {
         return -1;
     }
 
     let bridge = unsafe { &*(bridge_ptr as *const Ext4Bridge) };
     let root_str = unsafe { CStr::from_ptr(root_path) }.to_string_lossy();
-    let depth_opt = if max_depth == 0 || max_depth == u32::MAX {
+    let depth_opt = if max_depth == u32::MAX {
         None
     } else {
         Some(max_depth)
     };
+    let timeout_opt = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+    let max_entries_opt = if max_entries == 0 { None } else { Some(max_entries) };
 
-    match bridge.tree_scan(&root_str, depth_opt) {
-        Ok(entries) => {
-            let mut count: i32 = 0;
-            for entry in &entries {
-                if let Ok(c_path) = CString::new(entry.path.as_str()) {
-                    let ret = cb(
-                        c_path.as_ptr(),
-                        entry.size_bytes,
-                        entry.is_dir,
-                        entry.mtime,
-                        entry.inode,
-                        user_data,
-                    );
-                    count += 1;
-                    if ret != 0 {
-                        break; // Caller requested abort
-                    }
-                }
-            }
-            count
+    match bridge.tree_scan_visit(&root_str, depth_opt, timeout_opt, max_entries_opt, debug_log, &mut |entry| {
+        if let Ok(c_path) = CString::new(entry.path.as_str()) {
+            cb(
+                c_path.as_ptr(),
+                entry.size_bytes,
+                entry.is_dir,
+                entry.mtime,
+                entry.inode,
+                user_data,
+            )
+        } else {
+            0
         }
+    }) {
+        Ok(count) => count,
         Err(_) => -1,
     }
 }
@@ -158,7 +170,7 @@ pub extern "C" fn ext4_scan_jsonl(
 
     let bridge = unsafe { &*(bridge_ptr as *const Ext4Bridge) };
     let root_str = unsafe { CStr::from_ptr(root_path) }.to_string_lossy();
-    let depth_opt = if max_depth == 0 || max_depth == u32::MAX {
+    let depth_opt = if max_depth == u32::MAX {
         None
     } else {
         Some(max_depth)

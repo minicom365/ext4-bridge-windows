@@ -186,6 +186,12 @@ enum Cli {
         json: bool,
         #[arg(long, help = "Maximum traversal depth (default: unlimited)")]
         max_depth: Option<u32>,
+        #[arg(long, help = "Explicit timeout in milliseconds (default: unlimited)")]
+        timeout_ms: Option<u64>,
+        #[arg(long, help = "Explicit maximum entries to scan (default: unlimited)")]
+        max_entries: Option<usize>,
+        #[arg(long, help = "Emit per-directory and per-inode debug trace to stderr")]
+        debug: bool,
     },
     #[command(about = "Display filesystem statistics (capacity, free space, block size, inodes)")]
     StatFs {
@@ -420,11 +426,15 @@ fn main() {
                 Ok(())
             });
         }
-        Cli::TreeScan { drive, image, partition, path, json, max_depth } => {
+        Cli::TreeScan { drive, image, partition, path, json, max_depth, timeout_ms, max_entries, debug } => {
             let ctx = BridgeContext::new(drive, image, partition);
             ctx.execute(false, |bridge| {
                 let start_time = std::time::Instant::now();
-                let entries = bridge.tree_scan(&path, max_depth).map_err(|e| format!("TreeScan error: {:?}", e))?;
+                let mut entries = Vec::new();
+                bridge.tree_scan_visit(&path, max_depth, timeout_ms, max_entries, debug, &mut |entry| {
+                    entries.push(entry);
+                    0
+                }).map_err(|e| format!("TreeScan error: {:?}", e))?;
                 let elapsed = start_time.elapsed();
 
                 if json {

@@ -515,10 +515,14 @@ impl LwExt4BlockDevice {
                 let fincom = u32::from_le_bytes([buf[off + 96], buf[off + 97], buf[off + 98], buf[off + 99]]);
                 let fro = u32::from_le_bytes([buf[off + 100], buf[off + 101], buf[off + 102], buf[off + 103]]);
                 if buf[off + 56] == 0x53 && buf[off + 57] == 0xEF {
+                    let fcom = u32::from_le_bytes([buf[off + 92], buf[off + 93], buf[off + 94], buf[off + 95]]);
+                    let masked_fcom = fcom & !0x0020; // mask EXT4_FCOM_DIR_INDEX (0x0020) so lwext4 never hangs in ext4_dir_dx_find_entry
                     let masked_fincom = fincom & !0x6000;
                     let masked_fro = fro & !0x0400; // bypass metadata checksum check when mounting modern ext4
+                    let bytes_fcom = masked_fcom.to_le_bytes();
                     let bytes_fincom = masked_fincom.to_le_bytes();
                     let bytes_fro = masked_fro.to_le_bytes();
+                    buf[off + 92..off + 96].copy_from_slice(&bytes_fcom);
                     buf[off + 96..off + 100].copy_from_slice(&bytes_fincom);
                     buf[off + 100..off + 104].copy_from_slice(&bytes_fro);
                 }
